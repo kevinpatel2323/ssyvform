@@ -15,21 +15,22 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  output: 'standalone',
+  // Remove 'standalone' output as it might be causing issues with static assets
+  // output: 'standalone',
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
   },
-  experimental: {
-    // This is experimental but can be helpful for debugging
-    outputFileTracingExcludes: {
-      '*': [
-        'node_modules/**/*',
-      ],
-    },
+  // Configure assetPrefix for proper static asset serving
+  assetPrefix: process.env.NODE_ENV === 'production' ? '/' : '',
+  // Enable CSS modules
+  sassOptions: {
+    includePaths: ['./src'],
   },
+  // Ensure static files are properly exported
+  trailingSlash: true,
 } as NextConfig;
 
 export default nextConfig;
