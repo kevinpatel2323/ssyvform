@@ -14,7 +14,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  outputFileTracingRoot: path.resolve(__dirname, '../../'),
+  output: 'standalone',
+  experimental: {
+    outputFileTracingRoot: path.join(__dirname, '..')
+  },
   typescript: {
     ignoreBuildErrors: true,
   },
