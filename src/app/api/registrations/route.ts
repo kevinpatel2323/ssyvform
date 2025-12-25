@@ -1,0 +1,89 @@
+import { NextResponse } from "next/server";
+import { createServiceSupabaseClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
+
+function requiredString(formData: FormData, key: string) {
+  const value = formData.get(key);
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Missing field: ${key}`);
+  }
+  return value.trim();
+}
+
+export async function POST(request: Request) {
+  try {
+    const supabase = createServiceSupabaseClient();
+
+    const formData = await request.formData();
+
+    const name = requiredString(formData, "name");
+    const birthday = requiredString(formData, "birthday");
+    const street = requiredString(formData, "street");
+    const city = requiredString(formData, "city");
+    const state = requiredString(formData, "state");
+    const zipCode = requiredString(formData, "zipCode");
+    const phone = requiredString(formData, "phone");
+    const nativePlace = requiredString(formData, "nativePlace");
+
+    const photo = formData.get("photo");
+    if (!(photo instanceof File)) {
+      return NextResponse.json(
+        { error: "Photo is required" },
+        { status: 400 }
+      );
+    }
+
+    const bucket = process.env.SUPABASE_PHOTOS_BUCKET ?? "registration-photos";
+    const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? "registrations";
+
+    const extension = photo.name.includes(".")
+      ? photo.name.split(".").pop()
+      : "jpg";
+
+    const photoPath = `${crypto.randomUUID()}.${extension}`;
+
+    const uploadRes = await supabase.storage
+      .from(bucket)
+      .upload(photoPath, photo, {
+        contentType: photo.type || "application/octet-stream",
+        upsert: false,
+      });
+
+    if (uploadRes.error) {
+      return NextResponse.json(
+        { error: uploadRes.error.message },
+        { status: 500 }
+      );
+    }
+
+    const insertRes = await supabase
+      .from(table)
+      .insert({
+        name,
+        birthday,
+        street,
+        city,
+        state,
+        zip_code: zipCode,
+        phone,
+        native_place: nativePlace,
+        photo_bucket: bucket,
+        photo_path: photoPath,
+      })
+      .select("id")
+      .single();
+
+    if (insertRes.error) {
+      return NextResponse.json(
+        { error: insertRes.error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, id: insertRes.data.id });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
