@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
-import path from "node:path";
 
 const nextConfig: NextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
   images: {
     remotePatterns: [
       {
@@ -15,15 +16,20 @@ const nextConfig: NextConfig = {
     ],
   },
   output: 'standalone',
-  experimental: {
-    outputFileTracingRoot: path.join(__dirname, '..')
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
   eslint: {
     ignoreDuringBuilds: true,
-  }
+  },
+  experimental: {
+    // This is experimental but can be helpful for debugging
+    outputFileTracingExcludes: {
+      '*': [
+        'node_modules/**/*',
+      ],
+    },
+  },
 } as NextConfig;
 
 export default nextConfig;
