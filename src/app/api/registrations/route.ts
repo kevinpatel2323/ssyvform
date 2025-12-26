@@ -11,13 +11,22 @@ function requiredString(formData: FormData, key: string) {
   return value.trim();
 }
 
+function capitalizeFirstLetter(str: string): string {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = createServiceSupabaseClient();
 
     const formData = await request.formData();
 
-    const name = requiredString(formData, "name");
+    // Get name fields and capitalize first letter
+    const firstName = capitalizeFirstLetter(requiredString(formData, "firstName"));
+    const middleName = capitalizeFirstLetter(requiredString(formData, "middleName"));
+    const lastName = capitalizeFirstLetter(requiredString(formData, "lastName"));
+
     const birthday = requiredString(formData, "birthday");
     const street = requiredString(formData, "street");
     const city = requiredString(formData, "city");
@@ -57,20 +66,27 @@ export async function POST(request: Request) {
       );
     }
 
+    // Build insert object with new name fields
+    // Note: You must run the migration (update_registrations_name_fields.sql) first
+    // to add the first_name, middle_name, and last_name columns to your database
+    const insertData = {
+      first_name: firstName,
+      middle_name: middleName,
+      last_name: lastName,
+      birthday,
+      street,
+      city,
+      state,
+      zip_code: zipCode,
+      phone,
+      native_place: nativePlace,
+      photo_bucket: bucket,
+      photo_path: photoPath,
+    };
+
     const insertRes = await supabase
       .from(table)
-      .insert({
-        name,
-        birthday,
-        street,
-        city,
-        state,
-        zip_code: zipCode,
-        phone,
-        native_place: nativePlace,
-        photo_bucket: bucket,
-        photo_path: photoPath,
-      })
+      .insert(insertData)
       .select("id")
       .single();
 

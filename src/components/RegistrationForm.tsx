@@ -58,7 +58,9 @@ const Calendar = dynamic(
 );
 
 const formSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
+  firstName: z.string().min(1, "First name is required").max(50, "First name must be less than 50 characters"),
+  middleName: z.string().min(1, "Middle name is required").max(50, "Middle name must be less than 50 characters"),
+  lastName: z.string().min(1, "Last name is required").max(50, "Last name must be less than 50 characters"),
   birthday: z.date({
     message: "Please select your birthday",
   }),
@@ -225,7 +227,9 @@ export function RegistrationForm() {
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema) as unknown as Resolver<FormValues>,
     defaultValues: {
-      name: "",
+      firstName: "",
+      middleName: "",
+      lastName: "",
       street: "",
       city: "",
       state: "",
@@ -344,7 +348,9 @@ export function RegistrationForm() {
       const phone = `${data.phoneCountryCode}${data.phoneNumber}`;
 
       const body = new FormData();
-      body.set("name", data.name);
+      body.set("firstName", data.firstName);
+      body.set("middleName", data.middleName);
+      body.set("lastName", data.lastName);
       body.set("birthday", data.birthday.toISOString().slice(0, 10));
       body.set("street", data.street);
       body.set("city", data.city);
@@ -389,27 +395,93 @@ export function RegistrationForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        {/* Name Field */}
-        <FormField
-          control={form.control}
-          name="name"
-          render={({ field }) => (
-            <FormItem className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
-              <FormLabel className="flex items-center gap-2 text-foreground font-medium">
-                <User className="w-4 h-4 text-secondary" />
-                Full Name
-              </FormLabel>
-              <FormControl>
-                <Input
-                  placeholder="Enter your full name"
-                  {...field}
-                  className="bg-card border-border focus:border-primary focus:ring-primary/20"
-                />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* Name Fields */}
+        <div className="space-y-4 animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <FormLabel className="flex items-center gap-2 text-foreground font-medium">
+            <User className="w-4 h-4 text-secondary" />
+            Name
+          </FormLabel>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="firstName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm">First Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="First name"
+                      {...field}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Auto-capitalize first letter
+                        const capitalized = value.length > 0 
+                          ? value.charAt(0).toUpperCase() + value.slice(1)
+                          : value;
+                        field.onChange(capitalized);
+                      }}
+                      className="bg-card border-border focus:border-primary focus:ring-primary/20"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="middleName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm">Middle Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Middle name"
+                      {...field}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Auto-capitalize first letter
+                        const capitalized = value.length > 0 
+                          ? value.charAt(0).toUpperCase() + value.slice(1)
+                          : value;
+                        field.onChange(capitalized);
+                      }}
+                      className="bg-card border-border focus:border-primary focus:ring-primary/20"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="lastName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm">Last Name</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Last name"
+                      {...field}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Auto-capitalize first letter
+                        const capitalized = value.length > 0 
+                          ? value.charAt(0).toUpperCase() + value.slice(1)
+                          : value;
+                        field.onChange(capitalized);
+                      }}
+                      className="bg-card border-border focus:border-primary focus:ring-primary/20"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
 
         {/* Birthday Field */}
         <FormField
