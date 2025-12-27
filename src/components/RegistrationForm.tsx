@@ -17,8 +17,11 @@ import {
   Camera,
   Check,
   ChevronsUpDown,
-  Plus
+  Plus,
+  Youtube,
+  Instagram
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -215,6 +218,7 @@ export function RegistrationForm() {
 
   const [isCustomCity, setIsCustomCity] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sortedCities = useMemo(() => [...cities].sort((a, b) => a.localeCompare(b)), [cities]);
@@ -384,6 +388,8 @@ export function RegistrationForm() {
       setPhotoPreview(null);
       setPhotoFile(null);
       setPhotoError(null);
+      
+      router.push("/success");
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error";
       toast.error("Registration failed", { description: message });
@@ -931,6 +937,28 @@ export function RegistrationForm() {
         >
           {isSubmitting ? "Submitting..." : "Submit Registration"}
         </Button>
+        
+        {/* Social Media Links */}
+        <div className="flex justify-center gap-6 mt-6 animate-fade-in" style={{ animationDelay: "0.65s" }}>
+          <a 
+            href="https://youtube.com/@smsm73933?si=IWusOGGmLXzH8uFA" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-muted-foreground hover:text-[#FF0000] transition-colors"
+          >
+            <Youtube className="w-5 h-5" />
+            <span className="text-sm font-medium">YouTube</span>
+          </a>
+          <a 
+            href="https://www.instagram.com/smsm_morbi/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 text-muted-foreground hover:text-[#E4405F] transition-colors"
+          >
+            <Instagram className="w-5 h-5" />
+            <span className="text-sm font-medium">Instagram</span>
+          </a>
+        </div>
       </form>
     </Form>
   );

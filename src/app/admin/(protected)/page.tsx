@@ -91,7 +91,7 @@ export default function AdminDashboard() {
     totalPages: 0,
   });
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<SortColumn>("id");
+  const [sortBy, setSortBy] = useState<SortColumn>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState<{
@@ -300,15 +300,6 @@ export default function AdminDashboard() {
                 <TableRow>
                   <TableHead
                     className="cursor-pointer select-none"
-                    onClick={() => handleSort("id")}
-                  >
-                    <div className="flex items-center">
-                      ID
-                      <SortIcon column="id" />
-                    </div>
-                  </TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none"
                     onClick={() => handleSort("first_name")}
                   >
                     <div className="flex items-center">
@@ -403,20 +394,19 @@ export default function AdminDashboard() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-8">
+                    <TableCell colSpan={11} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                     </TableCell>
                   </TableRow>
                 ) : registrations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                       No registrations found
                     </TableCell>
                   </TableRow>
                 ) : (
                   registrations.map((reg) => (
                     <TableRow key={reg.id}>
-                      <TableCell className="font-mono text-xs">{reg.id.slice(0, 8)}...</TableCell>
                       <TableCell className="font-medium">{reg.first_name || '-'}</TableCell>
                       <TableCell>{reg.middle_name || '-'}</TableCell>
                       <TableCell className="font-medium">{reg.last_name || '-'}</TableCell>
