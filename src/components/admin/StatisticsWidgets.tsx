@@ -70,7 +70,7 @@ interface StatisticsWidgetsProps {
 }
 
 export function StatisticsWidgets({ refreshTrigger }: StatisticsWidgetsProps) {
-  const [selectedCity, setSelectedCity] = useState<string>("Ahmedabad");
+  const [selectedCity, setSelectedCity] = useState<string>("all");
   const [statistics, setStatistics] = useState<StatisticsData>({
     totalEntries: 0,
     cityCount: null,
@@ -79,7 +79,7 @@ export function StatisticsWidgets({ refreshTrigger }: StatisticsWidgetsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [availableCities, setAvailableCities] = useState<string[]>(INITIAL_GUJARAT_CITIES);
 
-  const fetchStatistics = async (city?: string) => {
+  const fetchStatistics = async (city: string = '') => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
@@ -128,7 +128,7 @@ export function StatisticsWidgets({ refreshTrigger }: StatisticsWidgetsProps) {
   };
 
   useEffect(() => {
-    fetchStatistics(selectedCity);
+    fetchStatistics(selectedCity === 'all' ? '' : selectedCity);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCity, refreshTrigger]);
 
@@ -173,9 +173,10 @@ export function StatisticsWidgets({ refreshTrigger }: StatisticsWidgetsProps) {
               </label>
               <Select value={selectedCity} onValueChange={handleCityChange}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a city" />
+                  <SelectValue placeholder="All Cities" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All Cities</SelectItem>
                   {availableCities.map((city) => (
                     <SelectItem key={city} value={city}>
                       {city}
@@ -192,11 +193,18 @@ export function StatisticsWidgets({ refreshTrigger }: StatisticsWidgetsProps) {
             ) : (
               <>
                 <div className="text-2xl font-bold">
-                  {statistics.cityCount ?? 0}
+                  {selectedCity === 'all' ? statistics.totalEntries : (statistics.cityCount ?? 0)}
                 </div>
                 <CardDescription>
-                  Entries from {selectedCity}
+                  {selectedCity === 'all' 
+                    ? 'Total registrations across all cities' 
+                    : `Entries from ${selectedCity}`}
                 </CardDescription>
+                {selectedCity !== 'all' && (
+                  <div className="text-sm text-muted-foreground mt-1">
+                    {statistics.totalEntries} total registrations
+                  </div>
+                )}
               </>
             )}
           </div>

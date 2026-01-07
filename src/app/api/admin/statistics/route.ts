@@ -15,12 +15,10 @@ export async function GET(request: Request) {
     const supabase = createServiceSupabaseClient();
     const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? "registrations";
 
-    // Get total count
-    let totalQuery = supabase.from(table).select("*", { count: "exact", head: true });
-    if (city) {
-      totalQuery = totalQuery.eq("city", city);
-    }
-    const { count: totalCount, error: totalError } = await totalQuery;
+    // Get total count (always get full count regardless of city filter)
+    const { count: totalCount, error: totalError } = await supabase
+      .from(table)
+      .select("*", { count: "exact", head: true });
 
     if (totalError) {
       return NextResponse.json(
@@ -30,7 +28,6 @@ export async function GET(request: Request) {
     }
 
     // Get city counts for dropdown (all cities with counts)
-    // Use a more efficient query by selecting distinct cities
     const { data: cityData, error: cityError } = await supabase
       .from(table)
       .select("city");
@@ -56,7 +53,20 @@ export async function GET(request: Request) {
     // Get count for specific city if provided
     let cityCount = null;
     if (city) {
-      cityCount = cityCounts[city] || 0;
+      // Get the count for the specific city
+      const { count: filteredCount, error: filteredError } = await supabase
+        .from(table)
+        .select("*", { count: "exact", head: true })
+        .eq("city", city);
+
+      if (filteredError) {
+        return NextResponse.json(
+          { error: filteredError.message },
+          { status: 500 }
+        );
+      }
+      
+      cityCount = filteredCount || 0;
     }
 
     return NextResponse.json({

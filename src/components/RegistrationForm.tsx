@@ -64,6 +64,7 @@ const formSchema = z.object({
   firstName: z.string().min(1, "First name is required").max(50, "First name must be less than 50 characters"),
   middleName: z.string().min(1, "Middle name is required").max(50, "Middle name must be less than 50 characters"),
   lastName: z.string().min(1, "Last name is required").max(50, "Last name must be less than 50 characters"),
+  gender: z.enum(["male", "female"]),
   birthday: z.date({
     message: "Please select your birthday",
   }),
@@ -234,6 +235,7 @@ export function RegistrationForm() {
       firstName: "",
       middleName: "",
       lastName: "",
+      gender: undefined,
       street: "",
       city: "",
       state: "",
@@ -355,6 +357,7 @@ export function RegistrationForm() {
       body.set("firstName", data.firstName);
       body.set("middleName", data.middleName);
       body.set("lastName", data.lastName);
+      body.set("gender", data.gender);
       body.set("birthday", data.birthday.toISOString().slice(0, 10));
       body.set("street", data.street);
       body.set("city", data.city);
@@ -388,8 +391,11 @@ export function RegistrationForm() {
       setPhotoPreview(null);
       setPhotoFile(null);
       setPhotoError(null);
-      
-      router.push("/success");
+      if (json && "id" in json) {
+        router.push(`/success?userId=${json.id}`);
+      } else {
+        router.push("/success");
+      }
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown error";
       toast.error("Registration failed", { description: message });
@@ -487,6 +493,51 @@ export function RegistrationForm() {
               )}
             />
           </div>
+        </div>
+
+        {/* Gender Field */}
+        <div className="space-y-2 animate-fade-in" style={{ animationDelay: "0.15s" }}>
+          <FormLabel className="flex items-center gap-2 text-foreground font-medium">
+            <User className="w-4 h-4 text-secondary" />
+            Gender
+          </FormLabel>
+          <FormField
+            control={form.control}
+            name="gender"
+            render={({ field }) => (
+              <FormItem className="space-y-3">
+                <FormControl>
+                  <div className="flex flex-wrap gap-6">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <div className={`flex items-center justify-center w-5 h-5 rounded-full border-2 ${field.value === 'male' ? 'border-primary' : 'border-border'}`}>
+                        {field.value === 'male' && <div className="w-3 h-3 rounded-full bg-primary"></div>}
+                      </div>
+                      <input
+                        type="radio"
+                        className="sr-only"
+                        checked={field.value === 'male'}
+                        onChange={() => field.onChange('male')}
+                      />
+                      <span className="text-sm">Male</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <div className={`flex items-center justify-center w-5 h-5 rounded-full border-2 ${field.value === 'female' ? 'border-primary' : 'border-border'}`}>
+                        {field.value === 'female' && <div className="w-3 h-3 rounded-full bg-primary"></div>}
+                      </div>
+                      <input
+                        type="radio"
+                        className="sr-only"
+                        checked={field.value === 'female'}
+                        onChange={() => field.onChange('female')}
+                      />
+                      <span className="text-sm">Female</span>
+                    </label>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
         </div>
 
         {/* Birthday Field */}

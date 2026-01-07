@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { useDebounce } from "use-debounce";
 import { format } from "date-fns";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Search,
   LogOut,
@@ -11,8 +13,11 @@ import {
   ArrowDown,
   Image as ImageIcon,
   Loader2,
+  RefreshCw,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,6 +28,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -47,6 +54,7 @@ interface Registration {
   middle_name: string;
   last_name: string;
   name?: string; // Optional for backward compatibility
+  gender: string;
   birthday: string;
   street: string;
   city: string;
@@ -56,6 +64,7 @@ interface Registration {
   native_place: string;
   photo_bucket: string;
   photo_path: string;
+  verified: boolean;
   created_at: string;
 }
 
@@ -71,12 +80,14 @@ type SortColumn =
   | "first_name"
   | "middle_name"
   | "last_name"
+  | "gender"
   | "birthday"
   | "city"
   | "state"
   | "zip_code"
   | "phone"
   | "native_place"
+  | "verified"
   | "created_at";
 
 type SortOrder = "asc" | "desc";
@@ -90,7 +101,14 @@ export default function AdminDashboard() {
     total: 0,
     totalPages: 0,
   });
+  const [customLimit, setCustomLimit] = useState<string>('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  
+  const pageSizeOptions = [10, 20, 50, 100, 200, 300, 500];
   const [search, setSearch] = useState("");
+  const [debouncedSearch] = useDebounce(search, 500);
+  const [genderFilter, setGenderFilter] = useState<string>("");
+  const [verificationFilter, setVerificationFilter] = useState<string>("");
   const [sortBy, setSortBy] = useState<SortColumn>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [isLoading, setIsLoading] = useState(true);
@@ -100,22 +118,53 @@ export default function AdminDashboard() {
   } | null>(null);
   const [isPhotoLoading, setIsPhotoLoading] = useState(false);
 
+  const handleLimitChange = (value: string) => {
+    if (value === 'custom') {
+      setShowCustomInput(true);
+      return;
+    }
+    
+    setShowCustomInput(false);
+    setPagination(prev => ({
+      ...prev,
+      page: 1, // Reset to first page when changing limit
+      limit: parseInt(value, 10)
+    }));
+  };
+
+  const handleCustomLimitSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const newLimit = parseInt(customLimit, 10);
+      if (!isNaN(newLimit) && newLimit > 0 && newLimit <= 1000) {
+        setPagination(prev => ({
+          ...prev,
+          page: 1, // Reset to first page when changing limit
+          limit: newLimit,
+          totalPages: Math.ceil(prev.total / newLimit)
+        }));
+        setShowCustomInput(false);
+      } else {
+        toast.error("Please enter a number between 1 and 1000");
+      }
+    }
+  };
+
   const fetchRegistrations = useCallback(async () => {
     setIsLoading(true);
     try {
       const params = new URLSearchParams({
         page: pagination.page.toString(),
         limit: pagination.limit.toString(),
+        search: debouncedSearch,
+        gender: genderFilter,
+        verified: verificationFilter === "all" ? "" : verificationFilter,
         sortBy,
         sortOrder,
       });
 
-      if (search) {
-        params.append("search", search);
-      }
-
-      const res = await fetch(`/api/admin/registrations?${params.toString()}`);
-      const json = (await res.json().catch(() => null)) as
+      const response = await fetch(`/api/admin/registrations?${params.toString()}`);
+      const json = (await response.json().catch(() => null)) as
         | {
             registrations: Registration[];
             pagination: PaginationData;
@@ -123,8 +172,8 @@ export default function AdminDashboard() {
         | { error: string }
         | null;
 
-      if (!res.ok) {
-        if (res.status === 401) {
+      if (!response.ok) {
+        if (response.status === 401) {
           router.push("/admin/login");
           return;
         }
@@ -143,7 +192,7 @@ export default function AdminDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [pagination.page, pagination.limit, sortBy, sortOrder, search, router]);
+  }, [pagination.page, pagination.limit, sortBy, sortOrder, debouncedSearch, genderFilter, verificationFilter, router]);
 
   useEffect(() => {
     fetchRegistrations();
@@ -153,6 +202,18 @@ export default function AdminDashboard() {
     setSearch(value);
     setPagination((prev) => ({ ...prev, page: 1 }));
   };
+
+  const handleGenderFilterChange = (value: string) => {
+    setGenderFilter(value);
+    setPagination((prev) => ({ ...prev, page: 1 }));
+  };
+
+  const clearFilters = useCallback(() => {
+    setSearch("");
+    setGenderFilter("");
+    setVerificationFilter("");
+    setPagination((prev) => ({ ...prev, page: 1 }));
+  }, []);
 
   const handleSort = (column: SortColumn) => {
     if (sortBy === column) {
@@ -176,6 +237,45 @@ export default function AdminDashboard() {
       }
     } catch (e) {
       toast.error("Logout failed");
+    }
+  };
+
+  const handleToggleVerification = async (id: string, currentVerified: boolean) => {
+    const newVerifiedState = !currentVerified;
+    
+    try {
+      const response = await fetch('/api/admin/registrations', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id, verified: newVerifiedState }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update verification status');
+      }
+
+      // Update the local state to reflect the change
+      setRegistrations(prev => 
+        prev.map(reg => 
+          reg.id === id 
+            ? { ...reg, verified: result.registration.verified }
+            : reg
+        )
+      );
+      
+      // Show success message
+      if (newVerifiedState) {
+        toast.success(`User with id ${id} has been verified successfully`);
+      } else {
+        toast.warning(`User with id ${id} has been unverified successfully`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update verification status';
+      toast.error(message);
     }
   };
 
@@ -279,17 +379,113 @@ export default function AdminDashboard() {
 
       <div className="container mx-auto p-4 space-y-6">
         {/* Statistics Widgets */}
-        <StatisticsWidgets refreshTrigger={pagination.total} />
+        {/* <StatisticsWidgets refreshTrigger={pagination.total} /> */}
 
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search by name, phone, city, state..."
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10 bg-background"
-          />
+        {/* Search and Filters */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 shadow-sm">
+          <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-xl">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-gray-400" />
+              </div>
+              <Input
+                placeholder="Search by id, name, phone, city, state..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchRegistrations}
+                title="Refresh data"
+                className="h-9 px-3 border-gray-300 dark:border-gray-600"
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+
+              {/* Filters */}
+              <div className="hidden sm:flex items-center space-x-2">
+                <Select
+                  value={genderFilter}
+                  onValueChange={handleGenderFilterChange}
+                >
+                  <SelectTrigger className="w-[140px] bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                    <SelectValue placeholder="Gender" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="male">Male</SelectItem>
+                    <SelectItem value="female">Female</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select
+                  value={verificationFilter}
+                  onValueChange={(value) => {
+                    setVerificationFilter(value);
+                    setPagination((prev) => ({ ...prev, page: 1 }));
+                  }}
+                >
+                  <SelectTrigger className="w-[160px] bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                    <SelectValue placeholder="Verification" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="verified">Verified Only</SelectItem>
+                    <SelectItem value="unverified">Unverified Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {(search || genderFilter || verificationFilter) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-gray-600 dark:text-gray-300 h-9 px-3"
+                >
+                  <X className="h-4 w-4 mr-1.5" />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile Filters */}
+          <div className="mt-3 sm:hidden flex space-x-2 overflow-x-auto pb-1">
+            <Select
+              value={genderFilter}
+              onValueChange={handleGenderFilterChange}
+            >
+              <SelectTrigger className="flex-1 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                <SelectValue placeholder="Gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="male">Male</SelectItem>
+                <SelectItem value="female">Female</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={verificationFilter}
+              onValueChange={(value) => {
+                setVerificationFilter(value);
+                setPagination((prev) => ({ ...prev, page: 1 }));
+              }}
+            >
+              <SelectTrigger className="flex-1 bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600">
+                <SelectValue placeholder="Verification" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="verified">Verified Only</SelectItem>
+                <SelectItem value="unverified">Unverified Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Table */}
@@ -298,6 +494,22 @@ export default function AdminDashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-32">
+                    <div className="flex items-center justify-center space-x-2">
+                      <span>Status</span>
+                      <SortIcon column="verified" />
+                    </div>
+                  </TableHead>
+                  <TableHead className="w-16">S.No.</TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none w-20"
+                    onClick={() => handleSort("id")}
+                  >
+                    <div className="flex items-center">
+                      ID
+                      <SortIcon column="id" />
+                    </div>
+                  </TableHead>
                   <TableHead
                     className="cursor-pointer select-none"
                     onClick={() => handleSort("first_name")}
@@ -388,25 +600,52 @@ export default function AdminDashboard() {
                       <SortIcon column="created_at" />
                     </div>
                   </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("gender")}
+                  >
+                    <div className="flex items-center">
+                      Gender
+                      <SortIcon column="gender" />
+                    </div>
+                  </TableHead>
                   <TableHead>Photo</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8">
+                    <TableCell colSpan={14} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                     </TableCell>
                   </TableRow>
                 ) : registrations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={14} className="text-center py-8 text-muted-foreground">
                       No registrations found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  registrations.map((reg) => (
+                  registrations.map((reg, index) => {
+                    // Calculate serial number based on current page and row index
+                    const serialNumber = (pagination.page - 1) * pagination.limit + index + 1;
+                    
+                    return (
                     <TableRow key={reg.id}>
+                      <TableCell>
+                        <div className="flex items-center justify-center space-x-2">
+                          <Switch
+                            id={`verified-${reg.id}`}
+                            checked={reg.verified}
+                            onCheckedChange={() => handleToggleVerification(reg.id, reg.verified)}
+                            className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-200"
+                          />
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center text-muted-foreground">
+                        {serialNumber}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{reg.id}</TableCell>
                       <TableCell className="font-medium">{reg.first_name || '-'}</TableCell>
                       <TableCell>{reg.middle_name || '-'}</TableCell>
                       <TableCell className="font-medium">{reg.last_name || '-'}</TableCell>
@@ -420,11 +659,12 @@ export default function AdminDashboard() {
                       <TableCell>{reg.zip_code}</TableCell>
                       <TableCell>{reg.phone}</TableCell>
                       <TableCell>{reg.native_place}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
+                      <TableCell>
                         {reg.created_at
-                          ? format(new Date(reg.created_at), "MMM d, yyyy")
+                          ? format(new Date(reg.created_at), 'MMM d, yyyy h:mm a')
                           : "-"}
                       </TableCell>
+                      <TableCell className="capitalize">{reg.gender || '-'}</TableCell>
                       <TableCell>
                         <Button
                           variant="outline"
@@ -436,15 +676,53 @@ export default function AdminDashboard() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
           </div>
         </div>
 
-        {/* Pagination */}
-        {pagination.totalPages > 0 && (
+        {/* Pagination and Page Size */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Show</span>
+            {showCustomInput ? (
+              <Input
+                type="number"
+                min="1"
+                max="1000"
+                value={customLimit}
+                onChange={(e) => setCustomLimit(e.target.value)}
+                onKeyDown={handleCustomLimitSubmit}
+                onBlur={() => setShowCustomInput(false)}
+                className="w-20 h-8 text-sm"
+                placeholder="Custom"
+                autoFocus
+              />
+            ) : (
+              <Select 
+                value={pagination.limit.toString()} 
+                onValueChange={handleLimitChange}
+              >
+                <SelectTrigger className="h-8 w-[80px]">
+                  <SelectValue placeholder={pagination.limit} />
+                </SelectTrigger>
+                <SelectContent>
+                  {pageSizeOptions.map(size => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">Custom...</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            <span className="text-sm text-muted-foreground">entries</span>
+          </div>
+          
+          {pagination.totalPages > 1 && (
           <Pagination>
             <PaginationContent>
               <PaginationItem>
@@ -490,7 +768,8 @@ export default function AdminDashboard() {
               </PaginationItem>
             </PaginationContent>
           </Pagination>
-        )}
+          )}
+        </div>
 
         {/* Pagination Info */}
         <div className="text-sm text-muted-foreground text-center">

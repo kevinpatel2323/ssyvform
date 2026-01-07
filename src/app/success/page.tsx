@@ -5,8 +5,11 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Check, Youtube, Instagram, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useSearchParams } from "next/navigation";
 
 export default function SuccessPage() {
+  const searchParams = useSearchParams();
+  const userId = searchParams.get('userId');
   return (
     <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center p-4">
       {/* Background gradient */}
@@ -43,6 +46,11 @@ export default function SuccessPage() {
         <p className="text-muted-foreground mb-8">
           Thank you for registering. Your details have been submitted successfully.
         </p>
+        {userId && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Your registration ID: <span className="font-mono text-black font-medium">{userId}</span>
+          </p>
+        )}
 
         {/* Social Media Subscription */}
         <div className="bg-secondary/5 rounded-lg p-6 mb-8 border border-secondary/10">

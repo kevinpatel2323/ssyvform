@@ -26,6 +26,14 @@ export async function POST(request: Request) {
     const firstName = capitalizeFirstLetter(requiredString(formData, "firstName"));
     const middleName = capitalizeFirstLetter(requiredString(formData, "middleName"));
     const lastName = capitalizeFirstLetter(requiredString(formData, "lastName"));
+    const gender = requiredString(formData, "gender");
+
+    if (gender !== "male" && gender !== "female") {
+      return NextResponse.json(
+        { error: "Invalid gender value" },
+        { status: 400 }
+      );
+    }
 
     const birthday = requiredString(formData, "birthday");
     const street = requiredString(formData, "street");
@@ -73,6 +81,7 @@ export async function POST(request: Request) {
       first_name: firstName,
       middle_name: middleName,
       last_name: lastName,
+      gender,
       birthday,
       street,
       city,

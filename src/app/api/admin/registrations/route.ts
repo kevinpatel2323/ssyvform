@@ -13,6 +13,8 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
     const search = searchParams.get("search") || "";
+    const gender = searchParams.get("gender") || "";
+    const verified = searchParams.get("verified") || "";
     const sortBy = searchParams.get("sortBy") || "id";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
@@ -25,8 +27,18 @@ export async function GET(request: Request) {
     if (search) {
       const searchLower = search.toLowerCase();
       query = query.or(
-        `first_name.ilike.%${searchLower}%,middle_name.ilike.%${searchLower}%,last_name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,city.ilike.%${searchLower}%,state.ilike.%${searchLower}%,native_place.ilike.%${searchLower}%,zip_code.ilike.%${searchLower}%`
+        `id_text.ilike.%${searchLower}%,first_name.ilike.%${searchLower}%,middle_name.ilike.%${searchLower}%,last_name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,city.ilike.%${searchLower}%,state.ilike.%${searchLower}%,native_place.ilike.%${searchLower}%,zip_code.ilike.%${searchLower}%`
       );
+    }
+
+    // Apply gender filter
+    if (gender) {
+      query = query.eq('gender', gender);
+    }
+
+    // Apply verification filter
+    if (verified === 'verified' || verified === 'unverified') {
+      query = query.eq('verified', verified === 'verified');
     }
 
     // Apply sorting
@@ -35,6 +47,7 @@ export async function GET(request: Request) {
       "first_name",
       "middle_name",
       "last_name",
+      "gender",
       "birthday",
       "city",
       "state",
@@ -68,6 +81,7 @@ export async function GET(request: Request) {
       middle_name: reg.middle_name || '',
       last_name: reg.last_name || '',
       name: reg.name || null, // Keep for backward compatibility
+      gender: reg.gender || null,
       birthday: reg.birthday,
       street: reg.street,
       city: reg.city,
@@ -77,6 +91,7 @@ export async function GET(request: Request) {
       native_place: reg.native_place,
       photo_bucket: reg.photo_bucket,
       photo_path: reg.photo_path,
+      verified: reg.verified || false,
       created_at: reg.created_at,
     }));
 
@@ -94,6 +109,53 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    // Require authentication
+    await requireAuth();
+
+    const { id, verified } = await request.json();
+    
+    if (typeof id === 'undefined' || typeof verified === 'undefined') {
+      return NextResponse.json(
+        { error: 'Missing required fields: id and verified are required' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createServiceSupabaseClient();
+    const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? 'registrations';
+
+    const { data, error } = await supabase
+      .from(table)
+      .update({ verified })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      registration: {
+        id: data.id,
+        verified: data.verified
+      }
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Unauthorized') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
