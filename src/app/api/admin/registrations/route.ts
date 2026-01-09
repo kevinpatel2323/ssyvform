@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     if (search) {
       const searchLower = search.toLowerCase();
       query = query.or(
-        `id_text.ilike.%${searchLower}%,first_name.ilike.%${searchLower}%,middle_name.ilike.%${searchLower}%,last_name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,city.ilike.%${searchLower}%,state.ilike.%${searchLower}%,native_place.ilike.%${searchLower}%,zip_code.ilike.%${searchLower}%`
+        `id_text.ilike.%${searchLower}%,${!isNaN(Number(searchLower)) ? `serial_number.eq.${searchLower}` : ''},first_name.ilike.%${searchLower}%,middle_name.ilike.%${searchLower}%,last_name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,city.ilike.%${searchLower}%,state.ilike.%${searchLower}%,native_place.ilike.%${searchLower}%,zip_code.ilike.%${searchLower}%`
       );
     }
 

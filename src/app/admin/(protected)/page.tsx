@@ -79,7 +79,6 @@ interface PaginationData {
 }
 
 type SortColumn =
-  | "id"
   | "serial_number"
   | "first_name"
   | "middle_name"
@@ -505,16 +504,6 @@ export default function AdminDashboard() {
                       <SortIcon column="verified" />
                     </div>
                   </TableHead>
-                  <TableHead className="w-16">S.No.</TableHead>
-                  <TableHead
-                    className="cursor-pointer select-none w-20"
-                    onClick={() => handleSort("id")}
-                  >
-                    <div className="flex items-center">
-                      ID
-                      <SortIcon column="id" />
-                    </div>
-                  </TableHead>
                   <TableHead
                     className="cursor-pointer select-none"
                     onClick={() => handleSort("serial_number")}
@@ -647,9 +636,6 @@ export default function AdminDashboard() {
                   </TableRow>
                 ) : (
                   registrations.map((reg, index) => {
-                    // Calculate serial number based on current page and row index
-                    const serialNumber = (pagination.page - 1) * pagination.limit + index + 1;
-                    
                     return (
                     <TableRow key={reg.id}>
                       <TableCell>
@@ -662,10 +648,6 @@ export default function AdminDashboard() {
                           />
                         </div>
                       </TableCell>
-                      <TableCell className="text-center text-muted-foreground">
-                        {serialNumber}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{reg.id}</TableCell>
                       <TableCell className="font-medium">{reg.serial_number || '-'}</TableCell>
                       <TableCell className="font-medium">{reg.first_name || '-'}</TableCell>
                       <TableCell>{reg.middle_name || '-'}</TableCell>
