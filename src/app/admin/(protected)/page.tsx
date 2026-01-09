@@ -15,6 +15,7 @@ import {
   Loader2,
   RefreshCw,
   X,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CheckCircle2, XCircle } from "lucide-react";
@@ -374,10 +375,16 @@ export default function AdminDashboard() {
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
           <h1 className="text-xl font-bold">Admin Dashboard</h1>
-          <Button variant="outline" onClick={handleLogout}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Logout
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button variant="outline" onClick={() => router.push("/admin/stats")}>
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Stats
+            </Button>
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
         </div>
       </header>
 
