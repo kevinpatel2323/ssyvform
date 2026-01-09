@@ -48,9 +48,16 @@ export default function SuccessContent() {
           Thank you for registering. Your details have been submitted successfully.
         </p>
         {serialNumber && (
-          <p className="text-sm text-muted-foreground mt-2">
-            Your Serial Number: <span className="font-mono text-black font-medium">{serialNumber}</span>
-          </p>
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-lg border border-blue-200 shadow-sm mb-4 mt-2">
+            <p className="text-sm font-medium text-blue-800 mb-2">Your Registration is Confirmed</p>
+            <div className="flex flex-col items-center gap-2">
+              <div className="text-sm text-blue-600">Serial Number:</div>
+              <div className="text-2xl font-bold font-mono text-blue-800 bg-white px-6 py-2 rounded-md border border-blue-200 shadow-inner text-center">
+                {serialNumber}
+              </div>
+            </div>
+            <p className="text-xs text-blue-600 mt-2">Please keep this number for reference.</p>
+          </div>
         )}
 
         {/* Social Media Subscription */}
