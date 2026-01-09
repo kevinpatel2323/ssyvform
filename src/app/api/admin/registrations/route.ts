@@ -44,16 +44,19 @@ export async function GET(request: Request) {
     // Apply sorting
     const validSortColumns = [
       "id",
+      "serial_number",
       "first_name",
       "middle_name",
       "last_name",
       "gender",
+      "marital_status",
       "birthday",
       "city",
       "state",
       "zip_code",
       "phone",
       "native_place",
+      "verified",
       "created_at",
     ];
     const sortColumn = validSortColumns.includes(sortBy) ? sortBy : "id";
@@ -77,17 +80,20 @@ export async function GET(request: Request) {
     // Remove sensitive data if any
     const registrations = (data || []).map((reg: any) => ({
       id: reg.id,
+      serial_number: reg.serial_number || '',
       first_name: reg.first_name || '',
       middle_name: reg.middle_name || '',
       last_name: reg.last_name || '',
       name: reg.name || null, // Keep for backward compatibility
       gender: reg.gender || null,
+      marital_status: reg.marital_status || null,
       birthday: reg.birthday,
       street: reg.street,
       city: reg.city,
       state: reg.state,
       zip_code: reg.zip_code,
       phone: reg.phone,
+      relative_phone: reg.relative_phone || null,
       native_place: reg.native_place,
       photo_bucket: reg.photo_bucket,
       photo_path: reg.photo_path,
@@ -159,4 +165,3 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

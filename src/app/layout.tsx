@@ -22,8 +22,8 @@ export const metadata: Metadata = {
   title: "SSYV Form",
   description: "SSYV Registration Form",
   icons: {
-    icon: "/smsm-logo.png",
-    apple: "/smsm-logo.png",
+    icon: "/smsm-logo-1.png",
+    apple: "/smsm-logo-1.png",
   },
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3001'),
 };

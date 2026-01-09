@@ -9,7 +9,7 @@ import { useSearchParams } from "next/navigation";
 
 export default function SuccessContent() {
   const searchParams = useSearchParams();
-  const userId = searchParams.get('userId');
+  const serialNumber = searchParams.get('serialNumber');
   
   return (
     <div className="min-h-screen bg-background relative overflow-hidden flex items-center justify-center p-4">
@@ -47,9 +47,9 @@ export default function SuccessContent() {
         <p className="text-muted-foreground mb-8">
           Thank you for registering. Your details have been submitted successfully.
         </p>
-        {userId && (
+        {serialNumber && (
           <p className="text-sm text-muted-foreground mt-2">
-            Your registration ID: <span className="font-mono text-black font-medium">{userId}</span>
+            Your Serial Number: <span className="font-mono text-black font-medium">{serialNumber}</span>
           </p>
         )}
 

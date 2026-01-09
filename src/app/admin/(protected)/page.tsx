@@ -50,17 +50,20 @@ import { StatisticsWidgets } from "@/components/admin/StatisticsWidgets";
 
 interface Registration {
   id: string;
+  serial_number: string;
   first_name: string;
   middle_name: string;
   last_name: string;
   name?: string; // Optional for backward compatibility
   gender: string;
+  marital_status: string;
   birthday: string;
   street: string;
   city: string;
   state: string;
   zip_code: string;
   phone: string;
+  relative_phone?: string;
   native_place: string;
   photo_bucket: string;
   photo_path: string;
@@ -77,10 +80,12 @@ interface PaginationData {
 
 type SortColumn =
   | "id"
+  | "serial_number"
   | "first_name"
   | "middle_name"
   | "last_name"
   | "gender"
+  | "marital_status"
   | "birthday"
   | "city"
   | "state"
@@ -512,6 +517,15 @@ export default function AdminDashboard() {
                   </TableHead>
                   <TableHead
                     className="cursor-pointer select-none"
+                    onClick={() => handleSort("serial_number")}
+                  >
+                    <div className="flex items-center">
+                      Serial Number
+                      <SortIcon column="serial_number" />
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="cursor-pointer select-none"
                     onClick={() => handleSort("first_name")}
                   >
                     <div className="flex items-center">
@@ -582,6 +596,9 @@ export default function AdminDashboard() {
                       <SortIcon column="phone" />
                     </div>
                   </TableHead>
+                  <TableHead>
+                    Relative Phone
+                  </TableHead>
                   <TableHead
                     className="cursor-pointer select-none"
                     onClick={() => handleSort("native_place")}
@@ -609,19 +626,22 @@ export default function AdminDashboard() {
                       <SortIcon column="gender" />
                     </div>
                   </TableHead>
+                  <TableHead className="capitalize">
+                    Marital Status
+                  </TableHead>
                   <TableHead>Photo</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-8">
+                    <TableCell colSpan={18} className="text-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                     </TableCell>
                   </TableRow>
                 ) : registrations.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={18} className="text-center py-8 text-muted-foreground">
                       No registrations found
                     </TableCell>
                   </TableRow>
@@ -646,6 +666,7 @@ export default function AdminDashboard() {
                         {serialNumber}
                       </TableCell>
                       <TableCell className="font-mono text-xs">{reg.id}</TableCell>
+                      <TableCell className="font-medium">{reg.serial_number || '-'}</TableCell>
                       <TableCell className="font-medium">{reg.first_name || '-'}</TableCell>
                       <TableCell>{reg.middle_name || '-'}</TableCell>
                       <TableCell className="font-medium">{reg.last_name || '-'}</TableCell>
@@ -658,6 +679,7 @@ export default function AdminDashboard() {
                       <TableCell>{reg.state}</TableCell>
                       <TableCell>{reg.zip_code}</TableCell>
                       <TableCell>{reg.phone}</TableCell>
+                      <TableCell>{reg.relative_phone || '-'}</TableCell>
                       <TableCell>{reg.native_place}</TableCell>
                       <TableCell>
                         {reg.created_at
@@ -665,6 +687,7 @@ export default function AdminDashboard() {
                           : "-"}
                       </TableCell>
                       <TableCell className="capitalize">{reg.gender || '-'}</TableCell>
+                      <TableCell className="capitalize">{reg.marital_status || '-'}</TableCell>
                       <TableCell>
                         <Button
                           variant="outline"

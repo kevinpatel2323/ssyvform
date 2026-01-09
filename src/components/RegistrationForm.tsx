@@ -53,6 +53,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 
 const Calendar = dynamic(
@@ -65,6 +67,7 @@ const formSchema = z.object({
   middleName: z.string().min(1, "Middle name is required").max(50, "Middle name must be less than 50 characters"),
   lastName: z.string().min(1, "Last name is required").max(50, "Last name must be less than 50 characters"),
   gender: z.enum(["male", "female"]),
+  maritalStatus: z.enum(["married", "unmarried"]),
   birthday: z.date({
     message: "Please select your birthday",
   }),
@@ -80,7 +83,27 @@ const formSchema = z.object({
     .min(7, "Phone number must be at least 7 digits")
     .max(15, "Phone number must be less than 15 digits")
     .regex(/^\d+$/, "Phone number must contain digits only"),
+  // Conditional fields for females
+  relativePhoneCountryCode: z
+    .string()
+    .regex(/^\+\d{1,4}$/, "Invalid country code")
+    .optional(),
+  relativePhoneNumber: z
+    .string()
+    .min(7, "Phone number must be at least 7 digits")
+    .max(15, "Phone number must be less than 15 digits")
+    .regex(/^\d+$/, "Phone number must contain digits only")
+    .optional(),
   nativePlace: z.string().min(2, "Native place is required"),
+}).refine((data) => {
+  // If gender is female, require relative phone number
+  if (data.gender === "female" && !data.relativePhoneNumber) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Relative phone is required for females",
+  path: ["relativePhoneNumber"],
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -209,9 +232,10 @@ export function RegistrationForm() {
   const [stateOpen, setStateOpen] = useState(false);
   const [nativePlaceOpen, setNativePlaceOpen] = useState(false);
 
-  const [cities, setCities] = useState(INITIAL_GUJARAT_CITIES);
-  const [states, setStates] = useState(INITIAL_STATES_AND_UTS);
-  const [nativePlaces, setNativePlaces] = useState(INITIAL_NATIVE_PLACES);
+  const [cities, setCities] = useState<string[]>([]);
+  const [states, setStates] = useState<string[]>([]);
+  const [nativePlaces, setNativePlaces] = useState<string[]>([]);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(true);
 
   const [citySearchValue, setCitySearchValue] = useState("");
   const [stateSearchValue, setStateSearchValue] = useState("");
@@ -236,32 +260,54 @@ export function RegistrationForm() {
       middleName: "",
       lastName: "",
       gender: undefined,
+      maritalStatus: undefined,
       street: "",
       city: "",
       state: "",
       zipCode: "",
       phoneCountryCode: "+91",
       phoneNumber: "",
+      relativePhoneCountryCode: "+91",
+      relativePhoneNumber: "",
       nativePlace: "",
     },
   });
 
+  const genderValue = form.watch("gender");
+
   const cityValue = form.watch("city");
 
+  // Fetch dropdown options from database on mount
   useEffect(() => {
-    if (!cityValue) {
-      setIsCustomCity(false);
-      form.setValue("state", "", { shouldValidate: true, shouldDirty: true });
-      setStateOpen(false);
-      return;
-    }
-    const isPresetGujaratCity = INITIAL_GUJARAT_CITIES.includes(cityValue);
-    if (isPresetGujaratCity) {
-      setIsCustomCity(false);
-      form.setValue("state", "Gujarat", { shouldValidate: true, shouldDirty: true });
-      setStateOpen(false);
-    }
-  }, [cityValue, form]);
+    const fetchOptions = async () => {
+      setIsLoadingOptions(true);
+      try {
+        const [citiesRes, statesRes, nativePlacesRes] = await Promise.all([
+          fetch("/api/dropdown-options?type=cities"),
+          fetch("/api/dropdown-options?type=states"),
+          fetch("/api/dropdown-options?type=native_places"),
+        ]);
+
+        const citiesData = await citiesRes.json();
+        const statesData = await statesRes.json();
+        const nativePlacesData = await nativePlacesRes.json();
+
+        if (citiesData.options) setCities(citiesData.options);
+        if (statesData.options) setStates(statesData.options);
+        if (nativePlacesData.options) setNativePlaces(nativePlacesData.options);
+      } catch (error) {
+        console.error("Failed to fetch dropdown options:", error);
+        // Fallback to initial values
+        setCities(INITIAL_GUJARAT_CITIES);
+        setStates(INITIAL_STATES_AND_UTS);
+        setNativePlaces(INITIAL_NATIVE_PLACES);
+      } finally {
+        setIsLoadingOptions(false);
+      }
+    };
+
+    fetchOptions();
+  }, []);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -283,56 +329,87 @@ export function RegistrationForm() {
     }
   };
 
-  const addNewNativePlace = (value: string) => {
+  const addNewNativePlace = async (value: string) => {
     const v = value.trim();
     if (v.length < 2) {
       toast.error("Please enter a valid native place");
       return;
     }
     if (!nativePlaces.includes(v)) {
-      setNativePlaces((prev) => [...prev, v]);
-      toast.success(`Added "${v}" to native places`);
+      try {
+        const res = await fetch("/api/dropdown-options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "native_places", name: v }),
+        });
+        if (res.ok) {
+          setNativePlaces((prev) => [...prev, v]);
+          toast.success(`Added "${v}" to native places`);
+        } else {
+          throw new Error("Failed to save");
+        }
+      } catch (error) {
+        toast.error("Failed to save native place");
+      }
     }
     form.setValue("nativePlace", v, { shouldValidate: true, shouldDirty: true });
     setNativePlaceOpen(false);
   };
 
-  const addNewCity = (value: string) => {
+  const addNewCity = async (value: string) => {
     const v = value.trim();
     if (v.length < 2) {
       toast.error("Please enter a valid city");
       return;
     }
 
-    const isPresetGujaratCity = INITIAL_GUJARAT_CITIES.includes(v);
-
     if (!cities.includes(v)) {
-      setCities((prev) => [...prev, v]);
-      toast.success(`Added "${v}" to cities`);
+      try {
+        const res = await fetch("/api/dropdown-options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "cities", name: v }),
+        });
+        if (res.ok) {
+          setCities((prev) => [...prev, v]);
+          toast.success(`Added "${v}" to cities`);
+        } else {
+          throw new Error("Failed to save");
+        }
+      } catch (error) {
+        toast.error("Failed to save city");
+      }
     }
 
-    if (isPresetGujaratCity) {
-      setIsCustomCity(false);
-      form.setValue("city", v, { shouldValidate: true, shouldDirty: true });
-      form.setValue("state", "Gujarat", { shouldValidate: true, shouldDirty: true });
-    } else {
-      setIsCustomCity(true);
-      form.setValue("city", v, { shouldValidate: true, shouldDirty: true });
-      form.setValue("state", "", { shouldValidate: true, shouldDirty: true });
-    }
+    setIsCustomCity(true);
+    form.setValue("city", v, { shouldValidate: true, shouldDirty: true });
+    // Don't auto-set state - allow custom entry
 
     setCityOpen(false);
   };
 
-  const addNewState = (value: string) => {
+  const addNewState = async (value: string) => {
     const v = value.trim();
     if (v.length < 2) {
       toast.error("Please enter a valid state");
       return;
     }
     if (!states.includes(v)) {
-      setStates((prev) => [...prev, v]);
-      toast.success(`Added "${v}" to states`);
+      try {
+        const res = await fetch("/api/dropdown-options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "states", name: v }),
+        });
+        if (res.ok) {
+          setStates((prev) => [...prev, v]);
+          toast.success(`Added "${v}" to states`);
+        } else {
+          throw new Error("Failed to save");
+        }
+      } catch (error) {
+        toast.error("Failed to save state");
+      }
     }
     form.setValue("state", v, { shouldValidate: true, shouldDirty: true });
     setStateOpen(false);
@@ -358,12 +435,21 @@ export function RegistrationForm() {
       body.set("middleName", data.middleName);
       body.set("lastName", data.lastName);
       body.set("gender", data.gender);
+      body.set("maritalStatus", data.maritalStatus);
       body.set("birthday", data.birthday.toISOString().slice(0, 10));
       body.set("street", data.street);
       body.set("city", data.city);
       body.set("state", data.state);
       body.set("zipCode", data.zipCode);
       body.set("phone", phone);
+      
+      // Add conditional phone field for females
+      if (data.gender === "female") {
+        if (data.relativePhoneNumber && data.relativePhoneCountryCode) {
+          body.set("relativePhone", `${data.relativePhoneCountryCode}${data.relativePhoneNumber}`);
+        }
+      }
+      
       body.set("nativePlace", data.nativePlace);
       body.set("photo", photoFile);
 
@@ -373,7 +459,7 @@ export function RegistrationForm() {
       });
 
       const json = (await res.json().catch(() => null)) as
-        | { ok: true; id: string }
+        | { ok: true; id: string; serialNumber?: string }
         | { error: string }
         | null;
 
@@ -391,8 +477,10 @@ export function RegistrationForm() {
       setPhotoPreview(null);
       setPhotoFile(null);
       setPhotoError(null);
-      if (json && "id" in json) {
-        router.push(`/success?userId=${json.id}`);
+      if (json && "ok" in json && json.ok) {
+        // Use serialNumber if available, otherwise fall back to id
+        const identifier = json.serialNumber || json.id;
+        router.push(`/success?serialNumber=${encodeURIComponent(identifier)}`);
       } else {
         router.push("/success");
       }
@@ -516,7 +604,11 @@ export function RegistrationForm() {
                         type="radio"
                         className="sr-only"
                         checked={field.value === 'male'}
-                        onChange={() => field.onChange('male')}
+                        onChange={() => {
+                          field.onChange('male');
+                          // Clear female-specific fields when switching to male
+                          form.setValue("relativePhoneNumber", "");
+                        }}
                       />
                       <span className="text-sm">Male</span>
                     </label>
@@ -533,6 +625,43 @@ export function RegistrationForm() {
                       <span className="text-sm">Female</span>
                     </label>
                   </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Marital Status Field */}
+        <div className="space-y-2 animate-fade-in" style={{ animationDelay: "0.16s" }}>
+          <FormLabel className="flex items-center gap-2 text-foreground font-medium">
+            <User className="w-4 h-4 text-secondary" />
+            Marital Status
+          </FormLabel>
+          <FormField
+            control={form.control}
+            name="maritalStatus"
+            render={({ field }) => (
+              <FormItem className="space-y-3">
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    value={field.value}
+                    className="flex flex-wrap gap-6"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="married" id="married" />
+                      <Label htmlFor="married" className="cursor-pointer text-sm font-normal">
+                        Married
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="unmarried" id="unmarried" />
+                      <Label htmlFor="unmarried" className="cursor-pointer text-sm font-normal">
+                        Unmarried
+                      </Label>
+                    </div>
+                  </RadioGroup>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -662,15 +791,11 @@ export function RegistrationForm() {
                                   value={city}
                                   key={city}
                                   onSelect={() => {
-                                    setIsCustomCity(false);
                                     form.setValue("city", city, {
                                       shouldValidate: true,
                                       shouldDirty: true,
                                     });
-                                    form.setValue("state", "Gujarat", {
-                                      shouldValidate: true,
-                                      shouldDirty: true,
-                                    });
+                                    // Don't auto-set state - allow custom entry
                                     setCityOpen(false);
                                   }}
                                 >
@@ -701,22 +826,18 @@ export function RegistrationForm() {
                   <FormControl>
                     <Popover
                       open={stateOpen}
-                      onOpenChange={(open) => {
-                        if (!isCustomCity) return;
-                        setStateOpen(open);
-                      }}
+                      onOpenChange={setStateOpen}
                     >
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          disabled={!isCustomCity}
                           className={cn(
                             "w-full justify-between bg-card border-border font-normal",
                             !field.value && "text-muted-foreground"
                           )}
                         >
-                          {field.value ? field.value : !isCustomCity ? "Gujarat" : "Select state"}
+                          {field.value ? field.value : "Select state"}
                           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
                       </PopoverTrigger>
@@ -849,6 +970,72 @@ export function RegistrationForm() {
             />
           </div>
         </div>
+
+        {/* Conditional Phone Field for Females */}
+        {genderValue === "female" && (
+          <>
+            {/* Relative's Phone (Brother's/Husband's/Father's) */}
+            <div className="space-y-2 animate-fade-in" style={{ animationDelay: "0.42s" }}>
+              <FormLabel className="flex items-center gap-2 text-foreground font-medium">
+                <Phone className="w-4 h-4 text-secondary" />
+                Relative's Phone (Brother's/Husband's/Father's) <span className="text-destructive">*</span>
+              </FormLabel>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <FormField
+                  control={form.control}
+                  name="relativePhoneCountryCode"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-1">
+                      <FormControl>
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value);
+                          }}
+                        >
+                          <SelectTrigger className="bg-card border-border">
+                            <SelectValue placeholder="Code" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COUNTRY_CODES.map((c) => (
+                              <SelectItem key={`relative-${c.label}-${c.value}`} value={c.value}>
+                                {c.label} ({c.value})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="relativePhoneNumber"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormControl>
+                        <Input
+                          placeholder="Enter relative's phone number"
+                          type="tel"
+                          inputMode="numeric"
+                          {...field}
+                          onChange={(e) => {
+                            const next = e.target.value.replace(/\D/g, "");
+                            field.onChange(next);
+                          }}
+                          className="bg-card border-border focus:border-primary focus:ring-primary/20"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Native Place Field */}
         <FormField

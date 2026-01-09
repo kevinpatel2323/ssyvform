@@ -13,16 +13,18 @@ export default function Home() {
       <div className="relative z-10 container max-w-lg mx-auto px-4 py-12 pb-16">
         {/* Header */}
         <header className="text-center mb-8 animate-fade-in">
-          {/* Logo */}
-          <div className="flex justify-center mb-6">
-            <Image
-              src="/smsm-logo.png"
-              alt="Shri Swaminarayan Mandir"
-              width={112}
-              height={112}
-              className="w-28 h-28 object-contain animate-float drop-shadow-lg"
-              priority
-            />
+          {/* Logo - matches form box width */}
+          <div className="mb-6">
+            <div className="ornate-border bg-card p-6 md:p-8 shadow-card rounded-lg">
+              <Image
+                src="/smsm-logo.png"
+                alt="Shri Swaminarayan Mandir"
+                width={512}
+                height={512}
+                className="w-full h-auto object-contain animate-float drop-shadow-lg"
+                priority
+              />
+            </div>
           </div>
 
           {/* Sanskrit blessing */}
