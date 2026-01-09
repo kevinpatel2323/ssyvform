@@ -62,7 +62,8 @@ const Calendar = dynamic(
   { ssr: false }
 );
 
-const formSchema = z.object({
+// Base schema
+const baseFormSchema = {
   firstName: z.string().min(1, "First name is required").max(50, "First name must be less than 50 characters"),
   middleName: z.string().min(1, "Middle name is required").max(50, "Middle name must be less than 50 characters"),
   lastName: z.string().min(1, "Last name is required").max(50, "Last name must be less than 50 characters"),
@@ -87,23 +88,34 @@ const formSchema = z.object({
   relativePhoneCountryCode: z
     .string()
     .regex(/^\+\d{1,4}$/, "Invalid country code")
-    .optional(),
+    .optional()
+    .or(z.literal('')),
   relativePhoneNumber: z
     .string()
-    .min(7, "Phone number must be at least 7 digits")
-    .max(15, "Phone number must be less than 15 digits")
-    .regex(/^\d+$/, "Phone number must contain digits only")
-    .optional(),
+    .optional()
+    .or(z.literal('')),
   nativePlace: z.string().min(2, "Native place is required"),
-}).refine((data) => {
+};
+
+// Create the form schema with conditional validation
+const formSchema = z.object(baseFormSchema).superRefine((data, ctx) => {
   // If gender is female, require relative phone number
-  if (data.gender === "female" && !data.relativePhoneNumber) {
-    return false;
+  if (data.gender === 'female') {
+    if (!data.relativePhoneNumber) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Relative's phone number is required for females",
+        path: ["relativePhoneNumber"],
+      });
+    }
+    if (!data.relativePhoneCountryCode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Relative's country code is required",
+        path: ["relativePhoneCountryCode"],
+      });
+    }
   }
-  return true;
-}, {
-  message: "Relative phone is required for females",
-  path: ["relativePhoneNumber"],
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -644,24 +656,32 @@ export function RegistrationForm() {
             render={({ field }) => (
               <FormItem className="space-y-3">
                 <FormControl>
-                  <RadioGroup
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    className="flex flex-wrap gap-6"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="married" id="married" />
-                      <Label htmlFor="married" className="cursor-pointer text-sm font-normal">
-                        Married
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="unmarried" id="unmarried" />
-                      <Label htmlFor="unmarried" className="cursor-pointer text-sm font-normal">
-                        Unmarried
-                      </Label>
-                    </div>
-                  </RadioGroup>
+                  <div className="flex flex-wrap gap-6">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <div className={`flex items-center justify-center w-5 h-5 rounded-full border-2 ${field.value === 'married' ? 'border-primary' : 'border-border'}`}>
+                        {field.value === 'married' && <div className="w-3 h-3 rounded-full bg-primary"></div>}
+                      </div>
+                      <input
+                        type="radio"
+                        className="sr-only"
+                        checked={field.value === 'married'}
+                        onChange={() => field.onChange('married')}
+                      />
+                      <span className="text-sm">Married</span>
+                    </label>
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                      <div className={`flex items-center justify-center w-5 h-5 rounded-full border-2 ${field.value === 'unmarried' ? 'border-primary' : 'border-border'}`}>
+                        {field.value === 'unmarried' && <div className="w-3 h-3 rounded-full bg-primary"></div>}
+                      </div>
+                      <input
+                        type="radio"
+                        className="sr-only"
+                        checked={field.value === 'unmarried'}
+                        onChange={() => field.onChange('unmarried')}
+                      />
+                      <span className="text-sm">Unmarried</span>
+                    </label>
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
