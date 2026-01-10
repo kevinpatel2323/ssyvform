@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
 const SESSION_COOKIE_NAME = "admin_session";
@@ -31,23 +31,21 @@ export async function getSession(): Promise<AdminUser | null> {
   }
 
   try {
-    const supabase = createServiceSupabaseClient();
-    const table = process.env.SUPABASE_ADMIN_USERS_TABLE ?? "admin_users";
+    const table = process.env.ADMIN_USERS_TABLE ?? "admin_users";
 
     // Verify session by checking if user exists
     // In a production app, you'd want a separate sessions table
     // For simplicity, we'll validate the session ID matches a user ID
-    const { data, error } = await supabase
-      .from(table)
-      .select("id, username, created_at")
-      .eq("id", sessionId)
-      .single();
+    const result = await query<AdminUser>(
+      `SELECT id, username, created_at FROM ${table} WHERE id = $1`,
+      [sessionId]
+    );
 
-    if (error || !data) {
+    if (result.rows.length === 0) {
       return null;
     }
 
-    return data as AdminUser;
+    return result.rows[0];
   } catch {
     return null;
   }

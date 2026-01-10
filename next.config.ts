@@ -14,8 +14,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Remove 'standalone' output as it might be causing issues with static assets
-  // output: 'standalone',
+  // Enable standalone output for Cloud Run deployment
+  output: 'standalone',
   typescript: {
     ignoreBuildErrors: true,
   },

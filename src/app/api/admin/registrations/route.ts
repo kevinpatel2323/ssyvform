@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -18,30 +18,59 @@ export async function GET(request: Request) {
     const sortBy = searchParams.get("sortBy") || "id";
     const sortOrder = searchParams.get("sortOrder") || "desc";
 
-    const supabase = createServiceSupabaseClient();
-    const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? "registrations";
+    const table = process.env.REGISTRATIONS_TABLE ?? "registrations";
 
-    let query = supabase.from(table).select("*", { count: "exact" });
+    // Build WHERE clause
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
 
     // Apply search filter
     if (search) {
-      const searchLower = search.toLowerCase();
-      query = query.or(
-        `id_text.ilike.%${searchLower}%${!isNaN(Number(searchLower)) ? `,serial_number.eq.${searchLower}` : ''},first_name.ilike.%${searchLower}%,middle_name.ilike.%${searchLower}%,last_name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,city.ilike.%${searchLower}%,state.ilike.%${searchLower}%,native_place.ilike.%${searchLower}%,zip_code.ilike.%${searchLower}%`
-      );
+      const searchLower = `%${search.toLowerCase()}%`;
+      const searchConditions: string[] = [
+        `LOWER(COALESCE(id_text::text, '')) LIKE $${paramIndex}`,
+        `LOWER(COALESCE(first_name, '')) LIKE $${paramIndex}`,
+        `LOWER(COALESCE(middle_name, '')) LIKE $${paramIndex}`,
+        `LOWER(COALESCE(last_name, '')) LIKE $${paramIndex}`,
+        `LOWER(COALESCE(phone, '')) LIKE $${paramIndex}`,
+        `LOWER(COALESCE(city, '')) LIKE $${paramIndex}`,
+        `LOWER(COALESCE(state, '')) LIKE $${paramIndex}`,
+        `LOWER(COALESCE(native_place, '')) LIKE $${paramIndex}`,
+        `LOWER(COALESCE(zip_code, '')) LIKE $${paramIndex}`,
+      ];
+      
+      // Add serial number exact match if search is numeric
+      if (!isNaN(Number(search))) {
+        searchConditions.push(`serial_number::text = $${paramIndex + 1}`);
+        params.push(searchLower);
+        params.push(search);
+        paramIndex += 2;
+      } else {
+        params.push(searchLower);
+        paramIndex++;
+      }
+      
+      conditions.push(`(${searchConditions.join(' OR ')})`);
     }
 
     // Apply gender filter
     if (gender) {
-      query = query.eq('gender', gender);
+      conditions.push(`gender = $${paramIndex}`);
+      params.push(gender);
+      paramIndex++;
     }
 
     // Apply verification filter
     if (verified === 'verified' || verified === 'unverified') {
-      query = query.eq('verified', verified === 'verified');
+      conditions.push(`verified = $${paramIndex}`);
+      params.push(verified === 'verified');
+      paramIndex++;
     }
 
-    // Apply sorting
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Validate sort column
     const validSortColumns = [
       "id",
       "serial_number",
@@ -60,22 +89,26 @@ export async function GET(request: Request) {
       "created_at",
     ];
     const sortColumn = validSortColumns.includes(sortBy) ? sortBy : "id";
-    const order = sortOrder === "asc" ? "asc" : "desc";
+    const order = sortOrder === "asc" ? "ASC" : "DESC";
 
-    query = query.order(sortColumn, { ascending: order === "asc" });
+    // Get total count
+    const countResult = await query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM ${table} ${whereClause}`,
+      params
+    );
+    const totalCount = parseInt(countResult.rows[0]?.count || "0", 10);
 
-    // Apply pagination
+    // Get paginated results
     const offset = (page - 1) * limit;
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, error, count } = await query;
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
+    const queryParams = [...params, limit, offset];
+    const limitParam = paramIndex;
+    const offsetParam = paramIndex + 1;
+    const dataResult = await query(
+      `SELECT * FROM ${table} ${whereClause} ORDER BY ${sortColumn} ${order} LIMIT $${limitParam} OFFSET $${offsetParam}`,
+      queryParams
+    );
+    const data = dataResult.rows;
+    const count = totalCount;
 
     // Remove sensitive data if any
     const registrations = (data || []).map((reg: any) => ({
@@ -133,28 +166,25 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const supabase = createServiceSupabaseClient();
-    const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? 'registrations';
+    const table = process.env.REGISTRATIONS_TABLE ?? 'registrations';
 
-    const { data, error } = await supabase
-      .from(table)
-      .update({ verified })
-      .eq('id', id)
-      .select('*')
-      .single();
+    const result = await query<{ id: string; verified: boolean }>(
+      `UPDATE ${table} SET verified = $1 WHERE id = $2 RETURNING id, verified`,
+      [verified, id]
+    );
 
-    if (error) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
+        { error: 'Registration not found' },
+        { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
       registration: {
-        id: data.id,
-        verified: data.verified
+        id: result.rows[0].id,
+        verified: result.rows[0].verified
       }
     });
   } catch (err) {

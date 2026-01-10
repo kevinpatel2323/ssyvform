@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
+import { uploadFile } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -18,8 +19,6 @@ function capitalizeFirstLetter(str: string): string {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createServiceSupabaseClient();
-
     const formData = await request.formData();
 
     // Get name fields and capitalize first letter
@@ -84,8 +83,8 @@ export async function POST(request: Request) {
       );
     }
 
-    const bucket = process.env.SUPABASE_PHOTOS_BUCKET ?? "registration-photos";
-    const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? "registrations";
+    const bucket = process.env.GCS_PHOTOS_BUCKET ?? "registration-photos";
+    const table = process.env.REGISTRATIONS_TABLE ?? "registrations";
 
     const extension = photo.name.includes(".")
       ? photo.name.split(".").pop()
@@ -93,16 +92,16 @@ export async function POST(request: Request) {
 
     const photoPath = `${crypto.randomUUID()}.${extension}`;
 
-    const uploadRes = await supabase.storage
-      .from(bucket)
-      .upload(photoPath, photo, {
-        contentType: photo.type || "application/octet-stream",
-        upsert: false,
-      });
-
-    if (uploadRes.error) {
+    try {
+      await uploadFile(
+        bucket,
+        photoPath,
+        photo,
+        photo.type || "application/octet-stream"
+      );
+    } catch (uploadError) {
       return NextResponse.json(
-        { error: uploadRes.error.message },
+        { error: uploadError instanceof Error ? uploadError.message : "Failed to upload photo" },
         { status: 500 }
       );
     }
@@ -135,23 +134,27 @@ export async function POST(request: Request) {
       }
     }
 
-    const insertRes = await supabase
-      .from(table)
-      .insert(insertData)
-      .select("id, serial_number")
-      .single();
+    const columns = Object.keys(insertData);
+    const values = Object.values(insertData);
+    const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+    const columnNames = columns.join(', ');
 
-    if (insertRes.error) {
+    const result = await query<{ id: string; serial_number: string }>(
+      `INSERT INTO ${table} (${columnNames}) VALUES (${placeholders}) RETURNING id, serial_number`,
+      values
+    );
+
+    if (result.rows.length === 0) {
       return NextResponse.json(
-        { error: insertRes.error.message },
+        { error: "Failed to create registration" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ 
       ok: true, 
-      id: insertRes.data.id,
-      serialNumber: insertRes.data.serial_number 
+      id: result.rows[0].id,
+      serialNumber: result.rows[0].serial_number 
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

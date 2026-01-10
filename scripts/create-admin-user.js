@@ -5,20 +5,46 @@
  *   node scripts/create-admin-user.js <username> <password>
  * 
  * Or set environment variables:
- *   ADMIN_USERNAME=admin ADMIN_PASSWORD=password node scripts/create-admin-user.js
+ *   ADMIN_USERNAME=admin ADMIN_PASSWORD=password DATABASE_URL=... node scripts/create-admin-user.js
+ * 
+ * Environment Variables:
+ *   DATABASE_URL - PostgreSQL connection string
+ *   OR individual DB variables:
+ *     DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+ *   ADMIN_USERS_TABLE - Table name (default: admin_users)
  */
 
 const bcrypt = require('bcryptjs');
-const { createClient } = require('@supabase/supabase-js');
+const { Pool } = require('pg');
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const table = process.env.SUPABASE_ADMIN_USERS_TABLE || 'admin_users';
+function getPoolConfig() {
+  // Try connection string first
+  if (process.env.DATABASE_URL) {
+    return {
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    };
+  }
 
-if (!supabaseUrl || !serviceRoleKey) {
-  console.error('Error: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
-  process.exit(1);
+  // Fall back to individual env vars
+  const config = {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '5432', 10),
+    database: process.env.DB_NAME || 'postgres',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  };
+
+  if (process.env.DB_SOCKET_PATH) {
+    config.host = process.env.DB_SOCKET_PATH;
+  }
+
+  return config;
 }
+
+const pool = new Pool(getPoolConfig());
+const table = process.env.ADMIN_USERS_TABLE || 'admin_users';
 
 const username = process.env.ADMIN_USERNAME || process.argv[2];
 const password = process.env.ADMIN_PASSWORD || process.argv[3];
@@ -42,22 +68,13 @@ if (password.length < 8) {
 
 async function createAdminUser() {
   try {
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    });
-
     // Check if username already exists
-    const { data: existingUser } = await supabase
-      .from(table)
-      .select('id')
-      .eq('username', username)
-      .single();
+    const existingResult = await pool.query(
+      `SELECT id FROM ${table} WHERE username = $1`,
+      [username]
+    );
 
-    if (existingUser) {
+    if (existingResult.rows.length > 0) {
       console.error(`Error: Username "${username}" already exists`);
       process.exit(1);
     }
@@ -66,26 +83,26 @@ async function createAdminUser() {
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Insert user
-    const { data, error } = await supabase
-      .from(table)
-      .insert({
-        username,
-        password_hash: passwordHash,
-      })
-      .select('id, username, created_at')
-      .single();
+    const result = await pool.query(
+      `INSERT INTO ${table} (username, password_hash) VALUES ($1, $2) RETURNING id, username, created_at`,
+      [username, passwordHash]
+    );
 
-    if (error) {
-      console.error('Error creating user:', error.message);
+    if (result.rows.length === 0) {
+      console.error('Error: Failed to create user');
       process.exit(1);
     }
 
+    const data = result.rows[0];
     console.log('✓ Admin user created successfully!');
     console.log(`  Username: ${data.username}`);
     console.log(`  ID: ${data.id}`);
     console.log(`  Created: ${data.created_at}`);
+    
+    await pool.end();
   } catch (error) {
     console.error('Error:', error.message);
+    await pool.end();
     process.exit(1);
   }
 }

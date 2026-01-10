@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import { requireAuth, hashPassword } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -32,17 +32,15 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createServiceSupabaseClient();
-    const table = process.env.SUPABASE_ADMIN_USERS_TABLE ?? "admin_users";
+    const table = process.env.ADMIN_USERS_TABLE ?? "admin_users";
 
     // Check if username already exists
-    const { data: existingUser } = await supabase
-      .from(table)
-      .select("id")
-      .eq("username", username)
-      .single();
+    const existingUserResult = await query<{ id: string }>(
+      `SELECT id FROM ${table} WHERE username = $1`,
+      [username]
+    );
 
-    if (existingUser) {
+    if (existingUserResult.rows.length > 0) {
       return NextResponse.json(
         { error: "Username already exists" },
         { status: 409 }
@@ -51,21 +49,19 @@ export async function POST(request: Request) {
 
     const passwordHash = await hashPassword(password);
 
-    const { data, error } = await supabase
-      .from(table)
-      .insert({
-        username,
-        password_hash: passwordHash,
-      })
-      .select("id, username, created_at")
-      .single();
+    const result = await query<{ id: string; username: string; created_at: string }>(
+      `INSERT INTO ${table} (username, password_hash) VALUES ($1, $2) RETURNING id, username, created_at`,
+      [username, passwordHash]
+    );
 
-    if (error) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
-        { error: error.message },
+        { error: "Failed to create user" },
         { status: 500 }
       );
     }
+
+    const data = result.rows[0];
 
     return NextResponse.json({
       ok: true,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -12,61 +12,37 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const city = searchParams.get("city") || null;
 
-    const supabase = createServiceSupabaseClient();
-    const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? "registrations";
+    const table = process.env.REGISTRATIONS_TABLE ?? "registrations";
 
     // Get total count (always get full count regardless of city filter)
-    const { count: totalCount, error: totalError } = await supabase
-      .from(table)
-      .select("*", { count: "exact", head: true });
-
-    if (totalError) {
-      return NextResponse.json(
-        { error: totalError.message },
-        { status: 500 }
-      );
-    }
+    const totalResult = await query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM ${table}`
+    );
+    const totalCount = parseInt(totalResult.rows[0]?.count || "0", 10);
 
     // Get city counts for dropdown (all cities with counts)
-    const { data: cityData, error: cityError } = await supabase
-      .from(table)
-      .select("city");
-
-    if (cityError) {
-      return NextResponse.json(
-        { error: cityError.message },
-        { status: 500 }
-      );
-    }
+    const cityDataResult = await query<{ city: string }>(
+      `SELECT city FROM ${table} WHERE city IS NOT NULL`
+    );
 
     // Count occurrences of each city
     const cityCounts: Record<string, number> = {};
-    if (cityData) {
-      cityData.forEach((row) => {
-        const cityName = row.city;
-        if (cityName) {
-          cityCounts[cityName] = (cityCounts[cityName] || 0) + 1;
-        }
-      });
-    }
+    cityDataResult.rows.forEach((row) => {
+      const cityName = row.city;
+      if (cityName) {
+        cityCounts[cityName] = (cityCounts[cityName] || 0) + 1;
+      }
+    });
 
     // Get count for specific city if provided
     let cityCount = null;
     if (city) {
       // Get the count for the specific city
-      const { count: filteredCount, error: filteredError } = await supabase
-        .from(table)
-        .select("*", { count: "exact", head: true })
-        .eq("city", city);
-
-      if (filteredError) {
-        return NextResponse.json(
-          { error: filteredError.message },
-          { status: 500 }
-        );
-      }
-      
-      cityCount = filteredCount || 0;
+      const filteredResult = await query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM ${table} WHERE city = $1`,
+        [city]
+      );
+      cityCount = parseInt(filteredResult.rows[0]?.count || "0", 10);
     }
 
     return NextResponse.json({

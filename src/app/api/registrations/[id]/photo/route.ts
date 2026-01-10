@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
+import { getSignedUrl } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -36,40 +37,31 @@ export async function GET(
     const { id } = await context.params;
     const expiresIn = parseExpiresInSeconds(new URL(request.url));
 
-    const supabase = createServiceSupabaseClient();
+    const table = process.env.REGISTRATIONS_TABLE ?? "registrations";
 
-    const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? "registrations";
+    const result = await query<{ photo_bucket: string; photo_path: string }>(
+      `SELECT photo_bucket, photo_path FROM ${table} WHERE id = $1`,
+      [id]
+    );
 
-    const registrationRes = await supabase
-      .from(table)
-      .select("photo_bucket, photo_path")
-      .eq("id", id)
-      .single();
-
-    if (registrationRes.error) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
-        { error: registrationRes.error.message },
+        { error: "Registration not found" },
         { status: 404 }
       );
     }
 
-    const { photo_bucket: bucket, photo_path: path } = registrationRes.data as {
-      photo_bucket: string;
-      photo_path: string;
-    };
+    const { photo_bucket: bucket, photo_path: path } = result.rows[0];
 
-    const signedRes = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(path, expiresIn);
-
-    if (signedRes.error) {
+    try {
+      const signedUrl = await getSignedUrl(bucket, path, expiresIn);
+      return NextResponse.json({ url: signedUrl, expiresIn });
+    } catch (error) {
       return NextResponse.json(
-        { error: signedRes.error.message },
+        { error: error instanceof Error ? error.message : "Failed to generate signed URL" },
         { status: 500 }
       );
     }
-
-    return NextResponse.json({ url: signedRes.data.signedUrl, expiresIn });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const status = message === "Unauthorized" ? 401 : 500;

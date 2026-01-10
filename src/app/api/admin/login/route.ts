@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import { verifyPassword, createSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -15,25 +15,25 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createServiceSupabaseClient();
-    const table = process.env.SUPABASE_ADMIN_USERS_TABLE ?? "admin_users";
+    const table = process.env.ADMIN_USERS_TABLE ?? "admin_users";
 
-    const { data, error } = await supabase
-      .from(table)
-      .select("id, username, password_hash")
-      .eq("username", username)
-      .single();
+    const result = await query<{ id: string; username: string; password_hash: string }>(
+      `SELECT id, username, password_hash FROM ${table} WHERE username = $1`,
+      [username]
+    );
 
-    if (error || !data) {
+    if (result.rows.length === 0) {
       return NextResponse.json(
         { error: "Invalid username or password" },
         { status: 401 }
       );
     }
 
+    const data = result.rows[0];
+
     const isValid = await verifyPassword(
       password,
-      data.password_hash as string
+      data.password_hash
     );
 
     if (!isValid) {

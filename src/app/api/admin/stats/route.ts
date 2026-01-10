@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 
 export const runtime = "nodejs";
@@ -12,124 +12,82 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const gender = (searchParams.get("gender") || "").trim();
 
-    const supabase = createServiceSupabaseClient();
-    const table = process.env.SUPABASE_REGISTRATIONS_TABLE ?? "registrations";
+    const table = process.env.REGISTRATIONS_TABLE ?? "registrations";
 
-    const applyGenderFilter = (query: any): any => {
-      if (!gender) return query;
-      // Use case-insensitive exact match to handle values like "Male" vs "male"
-      return query.ilike("gender", gender);
-    };
+    // Build WHERE clause for gender filter
+    const genderWhere = gender ? `WHERE LOWER(gender) = LOWER($1)` : "";
+    const genderParams = gender ? [gender] : [];
 
     // Get total registrations
-    const { count: totalRegistrations, error: totalError } = await applyGenderFilter(
-      supabase
-        .from(table)
-        .select("*", { count: "exact", head: true })
+    const totalResult = await query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM ${table} ${genderWhere}`,
+      genderParams
     );
-
-    if (totalError) {
-      return NextResponse.json({ error: totalError.message }, { status: 500 });
-    }
+    const totalRegistrations = parseInt(totalResult.rows[0]?.count || "0", 10);
 
     // Get verification stats
-    const { data: verificationData, error: verificationError } = await applyGenderFilter(
-      supabase
-        .from(table)
-        .select("verified")
+    const verificationResult = await query<{ verified: boolean }>(
+      `SELECT verified FROM ${table} ${genderWhere}`,
+      genderParams
     );
 
-    if (verificationError) {
-      return NextResponse.json({ error: verificationError.message }, { status: 500 });
-    }
-
-    const verifiedCount = (verificationData as Array<{ verified: boolean }> | null)
-      ?.filter((reg) => reg.verified).length || 0;
-    const unverifiedCount = ((verificationData as Array<{ verified: boolean }> | null)?.length || 0) - verifiedCount;
+    const verifiedCount = verificationResult.rows.filter((reg) => reg.verified).length;
+    const unverifiedCount = verificationResult.rows.length - verifiedCount;
 
     // Get gender distribution
-    const { data: genderData, error: genderError } = await supabase
-      .from(table)
-      .select("gender")
-      .not("gender", "is", null);
-
-    if (genderError) {
-      return NextResponse.json({ error: genderError.message }, { status: 500 });
-    }
-
-    const genderDistribution = (genderData as Array<{ gender: string | null }> | null)?.reduce((acc: Record<string, number>, reg: { gender: string | null }) => {
-      const gender = reg.gender?.toLowerCase() || "unknown";
-      acc[gender] = (acc[gender] || 0) + 1;
-      return acc;
-    }, {}) || {};
-
-    // Get cities by registrations
-    const { data: cityData, error: cityError } = await applyGenderFilter(
-      supabase
-        .from(table)
-        .select("city")
-        .not("city", "is", null)
+    const genderResult = await query<{ gender: string }>(
+      `SELECT gender FROM ${table} WHERE gender IS NOT NULL`
     );
 
-    if (cityError) {
-      return NextResponse.json({ error: cityError.message }, { status: 500 });
-    }
+    const genderDistribution = genderResult.rows.reduce((acc: Record<string, number>, reg: { gender: string }) => {
+      const genderValue = reg.gender?.toLowerCase() || "unknown";
+      acc[genderValue] = (acc[genderValue] || 0) + 1;
+      return acc;
+    }, {});
 
-    const citiesByRegistrations = (cityData as Array<{ city: string | null }> | null)?.reduce((acc: Record<string, number>, reg) => {
+    // Get cities by registrations
+    const cityResult = await query<{ city: string }>(
+      `SELECT city FROM ${table} ${genderWhere} AND city IS NOT NULL`,
+      genderParams
+    );
+
+    const citiesByRegistrations = cityResult.rows.reduce((acc: Record<string, number>, reg) => {
       const city = reg.city || "Unknown";
       acc[city] = (acc[city] || 0) + 1;
       return acc;
-    }, {}) || {};
+    }, {});
 
     // Get marital status distribution
-    const { data: maritalData, error: maritalError } = await applyGenderFilter(
-      supabase
-        .from(table)
-        .select("marital_status")
-        .not("marital_status", "is", null)
+    const maritalResult = await query<{ marital_status: string }>(
+      `SELECT marital_status FROM ${table} ${genderWhere} AND marital_status IS NOT NULL`,
+      genderParams
     );
 
-    if (maritalError) {
-      return NextResponse.json({ error: maritalError.message }, { status: 500 });
-    }
-
-    const maritalStatusDistribution = (maritalData as Array<{ marital_status: string | null }> | null)?.reduce((acc: Record<string, number>, reg) => {
+    const maritalStatusDistribution = maritalResult.rows.reduce((acc: Record<string, number>, reg) => {
       const status = reg.marital_status || "Unknown";
       acc[status] = (acc[status] || 0) + 1;
       return acc;
-    }, {}) || {};
+    }, {});
 
     // Get native place distribution
-    const { data: nativePlaceData, error: nativePlaceError } = await applyGenderFilter(
-      supabase
-        .from(table)
-        .select("native_place")
-        .not("native_place", "is", null)
+    const nativePlaceResult = await query<{ native_place: string }>(
+      `SELECT native_place FROM ${table} ${genderWhere} AND native_place IS NOT NULL`,
+      genderParams
     );
 
-    if (nativePlaceError) {
-      return NextResponse.json({ error: nativePlaceError.message }, { status: 500 });
-    }
-
-    const nativePlaceDistribution = (nativePlaceData as Array<{ native_place: string | null }> | null)?.reduce((acc: Record<string, number>, reg) => {
+    const nativePlaceDistribution = nativePlaceResult.rows.reduce((acc: Record<string, number>, reg) => {
       const place = reg.native_place || "Unknown";
       acc[place] = (acc[place] || 0) + 1;
       return acc;
-    }, {}) || {};
+    }, {});
 
     // Get age distribution from birthday
-    const { data: birthdayData, error: birthdayError } = await applyGenderFilter(
-      supabase
-        .from(table)
-        .select("birthday")
-        .not("birthday", "is", null)
+    const birthdayResult = await query<{ birthday: string }>(
+      `SELECT birthday FROM ${table} ${genderWhere} AND birthday IS NOT NULL`,
+      genderParams
     );
 
-    if (birthdayError) {
-      return NextResponse.json({ error: birthdayError.message }, { status: 500 });
-    }
-
-    const ageDistribution = (birthdayData as Array<{ birthday: string | null }> | null)?.reduce((acc: Record<string, number>, reg) => {
+    const ageDistribution = birthdayResult.rows.reduce((acc: Record<string, number>, reg) => {
       if (reg.birthday) {
         const birthDate = new Date(reg.birthday);
         const today = new Date();

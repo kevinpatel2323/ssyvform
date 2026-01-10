@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createServiceSupabaseClient } from "@/lib/supabase/server";
+import { query } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -16,21 +16,12 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = createServiceSupabaseClient();
-    const { data, error } = await supabase
-      .from(type)
-      .select("name")
-      .order("name", { ascending: true });
-
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
+    const result = await query<{ name: string }>(
+      `SELECT name FROM ${type} ORDER BY name ASC`
+    );
 
     return NextResponse.json({
-      options: (data || []).map((item) => item.name),
+      options: result.rows.map((item) => item.name),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
@@ -57,17 +48,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = createServiceSupabaseClient();
     const trimmedName = name.trim();
 
-    // Try to insert the new option
-    const { data, error } = await supabase
-      .from(type)
-      .insert({ name: trimmedName })
-      .select("name")
-      .single();
+    try {
+      // Try to insert the new option
+      const result = await query<{ name: string }>(
+        `INSERT INTO ${type} (name) VALUES ($1) RETURNING name`,
+        [trimmedName]
+      );
 
-    if (error) {
+      return NextResponse.json({
+        success: true,
+        option: result.rows[0].name,
+      });
+    } catch (error: any) {
       // If it's a unique constraint violation, the option already exists - that's fine
       if (error.code === "23505") {
         return NextResponse.json({
@@ -81,11 +75,6 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-
-    return NextResponse.json({
-      success: true,
-      option: data.name,
-    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
