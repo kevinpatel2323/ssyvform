@@ -24,9 +24,17 @@ export async function GET(
     // Require authentication via session
     await requireAuth();
 
-    const { id } = await context.params;
-    const expiresIn = parseExpiresInSeconds(new URL(request.url));
+    const params = await context.params;
+    const id = params.id;
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: "Registration ID is required" },
+        { status: 400 }
+      );
+    }
 
+    const expiresIn = parseExpiresInSeconds(new URL(request.url));
     const table = process.env.REGISTRATIONS_TABLE ?? "registrations";
 
     const result = await query<{ photo_bucket: string; photo_path: string }>(
@@ -35,6 +43,7 @@ export async function GET(
     );
 
     if (result.rows.length === 0) {
+      console.error(`Registration not found: ${id}`);
       return NextResponse.json(
         { error: "Registration not found" },
         { status: 404 }
@@ -43,10 +52,19 @@ export async function GET(
 
     const { photo_bucket: bucket, photo_path: path } = result.rows[0];
 
+    if (!bucket || !path) {
+      console.error(`Missing photo info for registration ${id}: bucket=${bucket}, path=${path}`);
+      return NextResponse.json(
+        { error: "Photo information not available" },
+        { status: 404 }
+      );
+    }
+
     try {
       const signedUrl = await getSignedUrl(bucket, path, expiresIn);
       return NextResponse.json({ url: signedUrl, expiresIn });
     } catch (error) {
+      console.error(`Failed to generate signed URL for ${id}:`, error);
       return NextResponse.json(
         { error: error instanceof Error ? error.message : "Failed to generate signed URL" },
         { status: 500 }
@@ -55,6 +73,7 @@ export async function GET(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const status = message === "Unauthorized" ? 401 : 500;
+    console.error("Photo route error:", err);
     return NextResponse.json({ error: message }, { status });
   }
 }

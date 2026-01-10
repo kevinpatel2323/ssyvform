@@ -17,9 +17,37 @@ function getPoolConfig(): PoolConfig {
     // Use connection string if provided
     // Format for Unix socket: postgresql://user:password@/database?host=/cloudsql/PROJECT:REGION:INSTANCE
     // Format for TCP: postgresql://user:password@host:port/database
+    // Note: If password contains special characters like @, make sure to URL encode them
+    // Example: @ becomes %40
+    
+    // Parse the connection string to handle special characters in password
+    let connectionString = process.env.DATABASE_URL;
+    
+    // For Unix socket connections, ensure we're using the socket path correctly
+    try {
+      const url = new URL(connectionString);
+      if (url.searchParams.get('host')?.startsWith('/cloudsql/')) {
+        // For Unix socket, we need to set host to the socket path
+        const socketPath = url.searchParams.get('host');
+        if (socketPath) {
+          return {
+            ...poolConfig,
+            host: socketPath,
+            database: url.pathname.slice(1) || process.env.DB_NAME || 'postgres',
+            user: url.username || process.env.DB_USER || 'postgres',
+            password: decodeURIComponent(url.password || ''),
+            ssl: false, // Unix socket connections don't use SSL
+          };
+        }
+      }
+    } catch (e) {
+      // If URL parsing fails, try using connectionString as-is
+      console.warn('Failed to parse DATABASE_URL, using as connection string:', e);
+    }
+    
     return {
       ...poolConfig,
-      connectionString: process.env.DATABASE_URL,
+      connectionString: connectionString,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     };
   } else {
