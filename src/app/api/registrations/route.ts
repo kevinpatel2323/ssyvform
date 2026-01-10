@@ -57,14 +57,20 @@ export async function POST(request: Request) {
     // Save custom city, state, and native place to database if they don't exist
     const saveCustomOption = async (type: "cities" | "states" | "native_places", name: string) => {
       try {
-        await fetch(`${new URL(request.url).origin}/api/dropdown-options`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type, name }),
-        });
-      } catch (err) {
-        // Silently fail - not critical if saving fails
-        console.error(`Failed to save custom ${type}:`, err);
+        const trimmedName = name.trim();
+        if (!trimmedName) return;
+        
+        // Try to insert the new option
+        await query<{ name: string }>(
+          `INSERT INTO ${type} (name) VALUES ($1)`,
+          [trimmedName]
+        );
+      } catch (err: any) {
+        // If it's a unique constraint violation, the option already exists - that's fine
+        // For any other error, silently fail - not critical if saving fails
+        if (err.code !== "23505") {
+          console.error(`Failed to save custom ${type}:`, err);
+        }
       }
     };
     
@@ -100,8 +106,10 @@ export async function POST(request: Request) {
         photo.type || "application/octet-stream"
       );
     } catch (uploadError) {
+      const errorMessage = uploadError instanceof Error ? uploadError.message : "Failed to upload photo";
+      console.error("Photo upload error:", errorMessage);
       return NextResponse.json(
-        { error: uploadError instanceof Error ? uploadError.message : "Failed to upload photo" },
+        { error: errorMessage },
         { status: 500 }
       );
     }

@@ -35,6 +35,13 @@ export async function uploadFile(
 ): Promise<string> {
   const storage = getStorageClient();
   const bucket = storage.bucket(bucketName);
+
+  // Check if bucket exists and is accessible
+  const [exists] = await bucket.exists();
+  if (!exists) {
+    throw new Error(`The specified bucket "${bucketName}" does not exist. Please check the bucket name in GCS_PHOTOS_BUCKET environment variable.`);
+  }
+
   const fileRef = bucket.file(fileName);
 
   let stream: Buffer | Readable;
@@ -68,6 +75,13 @@ export async function getSignedUrl(
 ): Promise<string> {
   const storage = getStorageClient();
   const bucket = storage.bucket(bucketName);
+
+  // Check if bucket exists
+  const [exists] = await bucket.exists();
+  if (!exists) {
+    throw new Error(`The specified bucket "${bucketName}" does not exist. Please check the bucket name in GCS_PHOTOS_BUCKET environment variable.`);
+  }
+
   const file = bucket.file(fileName);
 
   const [url] = await file.getSignedUrl({

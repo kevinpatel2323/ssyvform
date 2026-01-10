@@ -79,9 +79,31 @@ Click it to access your application!
 - Verify Cloud SQL instance is added in Container tab
 - Check DATABASE_URL format matches: `postgresql://USER:PASS@/DB?host=/cloudsql/PROJECT:REGION:INSTANCE`
 
-**Storage issues:**
-- Verify bucket name is correct
-- Check service account has Storage Object Admin role
+**Bucket doesn't exist error:**
+1. **Verify bucket name:**
+   - Go to GCP Console → **Cloud Storage** → **Buckets**
+   - Check exact bucket name (case-sensitive)
+   - Verify `GCS_PHOTOS_BUCKET` in Cloud Run environment variables matches exactly
+
+2. **Check service account permissions:**
+   - Go to **Cloud Storage** → Your bucket → **Permissions** tab
+   - Ensure your service account (`orchids-sms-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com`) has:
+     - **Storage Object Admin** or at least **Storage Object Creator** role
+   - Or grant `storage.objects.create` and `storage.objects.get` permissions
+
+3. **Test bucket access:**
+   ```bash
+   # List buckets to verify access
+   gsutil ls -p YOUR_PROJECT_ID
+   
+   # Check bucket exists
+   gsutil ls gs://YOUR_BUCKET_NAME
+   ```
+
+4. **Verify environment variable:**
+   - In Cloud Run → **Variables & Secrets** tab
+   - `GCS_PHOTOS_BUCKET` should be exactly: `your-bucket-name` (no `gs://` prefix)
+   - `GCS_PROJECT_ID` should be your actual project ID
 
 **View logs:**
 - In Cloud Run service page, click **Logs** tab
