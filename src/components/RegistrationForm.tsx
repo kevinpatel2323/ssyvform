@@ -324,13 +324,6 @@ export function RegistrationForm() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setPhotoError("Please select an image under 5MB");
-        toast.error("File too large", {
-          description: "Please select an image under 5MB",
-        });
-        return;
-      }
       setPhotoFile(file);
       setPhotoError(null);
       const reader = new FileReader();
@@ -1173,7 +1166,6 @@ export function RegistrationForm() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              capture="user"
               onChange={handlePhotoChange}
               className="hidden"
             />

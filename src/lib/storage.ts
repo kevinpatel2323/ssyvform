@@ -11,17 +11,16 @@ function getStorageClient(): Storage {
     // 2. Service account key JSON in GCS_KEY environment variable
     // 3. Default credentials (when running on GCP)
     
+    const config: any = {
+      projectId: process.env.GCS_PROJECT_ID,
+    };
+    
     if (process.env.GCS_KEY) {
       const key = JSON.parse(process.env.GCS_KEY);
-      storageClient = new Storage({
-        projectId: process.env.GCS_PROJECT_ID,
-        credentials: key,
-      });
-    } else {
-      storageClient = new Storage({
-        projectId: process.env.GCS_PROJECT_ID,
-      });
+      config.credentials = key;
     }
+    
+    storageClient = new Storage(config);
   }
   
   return storageClient;
@@ -73,23 +72,47 @@ export async function getSignedUrl(
   fileName: string,
   expiresInSeconds: number = 3600
 ): Promise<string> {
-  const storage = getStorageClient();
-  const bucket = storage.bucket(bucketName);
+  try {
+    const storage = getStorageClient();
+    const bucket = storage.bucket(bucketName);
 
-  // Check if bucket exists
-  const [exists] = await bucket.exists();
-  if (!exists) {
-    throw new Error(`The specified bucket "${bucketName}" does not exist. Please check the bucket name in GCS_PHOTOS_BUCKET environment variable.`);
+    // Check if bucket exists
+    const [exists] = await bucket.exists();
+    if (!exists) {
+      throw new Error(`The specified bucket "${bucketName}" does not exist. Please check the bucket name in GCS_PHOTOS_BUCKET environment variable.`);
+    }
+
+    const file = bucket.file(fileName);
+
+    // Check if file exists
+    const [fileExists] = await file.exists();
+    if (!fileExists) {
+      throw new Error(`File "${fileName}" not found in bucket "${bucketName}".`);
+    }
+
+    // Use version: 'v4' for better compatibility and to avoid signBlob permission issues
+    const [url] = await file.getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + expiresInSeconds * 1000,
+    });
+
+    return url;
+  } catch (error) {
+    // Provide more detailed error messages
+    if (error instanceof Error) {
+      // Re-throw with more context if it's our custom error
+      if (error.message.includes('does not exist') || error.message.includes('not found')) {
+        throw error;
+      }
+      // For permission errors, provide helpful message
+      if (error.message.includes('permission') || error.message.includes('Permission')) {
+        throw new Error(`Permission denied. Service account needs 'storage.objects.get' permission on bucket "${bucketName}". Check GCP IAM settings.`);
+      }
+      throw new Error(`Failed to generate signed URL: ${error.message}`);
+    }
+    throw error;
   }
-
-  const file = bucket.file(fileName);
-
-  const [url] = await file.getSignedUrl({
-    action: 'read',
-    expires: Date.now() + expiresInSeconds * 1000,
-  });
-
-  return url;
 }
 
 export async function deleteFile(bucketName: string, fileName: string): Promise<void> {
